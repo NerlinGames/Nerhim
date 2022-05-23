@@ -1,0 +1,11 @@
+[package]
+name = "nokden"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winit = "0.26.1"
+nalgebra = "0.30.1"
+ash = "0.37.0"
+ash-window = "0.10.0"
+raw-window-handle = "0.3.3"
