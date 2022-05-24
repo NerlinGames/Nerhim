@@ -6,7 +6,7 @@ use ash::util::Align;
 use nalgebra::base::Matrix4;
 use nalgebra::{Transform3, Matrix, Isometry3};
 use nokden::{Handle, Storage, offset_of, AssetPath};
-use nokden::graphics::{WorldViewProjection, Swapchain, ShaderInfo, Shader, GraphicsSystem};
+use nokden::graphics::{WorldViewProjection, Swapchain, Shader, GraphicsSystem};
 use crate::{NodeSystem, Node};
 
 /// Renders a non-animated mesh at a specific location.
@@ -24,68 +24,60 @@ impl MeshSystem
     )
     -> MeshSystem
     {
-        unsafe
+        let vert_in_bind_desc = vec!
+        [
+            VertexInputBindingDescription::builder()
+                .binding(0)
+                .stride(size_of::<VertexInput>() as u32)
+                .input_rate(vk::VertexInputRate::VERTEX)
+                .build()
+        ];
+
+        let vert_in_attr_desc = vec!
+        [
+            VertexInputAttributeDescription::builder()
+                .location(0)
+                .binding(0)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(VertexInput, position) as u32)
+                .build(),
+            VertexInputAttributeDescription::builder()
+                .location(1)
+                .binding(0)
+                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .offset(offset_of!(VertexInput, color) as u32)
+                .build()
+        ];
+
+        let vert_in_asmb_info = vk::PipelineInputAssemblyStateCreateInfo
         {
-            let vert_in_bind_desc = vec!
-            [
-                VertexInputBindingDescription::builder()
-                    .binding(0)
-                    .stride(size_of::<VertexInput>() as u32)
-                    .input_rate(vk::VertexInputRate::VERTEX)
-                    .build()
-            ];
+            topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            ..Default::default()
+        };
 
-            let vert_in_attr_desc = vec!
-            [
-                VertexInputAttributeDescription::builder()
-                    .location(0)
-                    .binding(0)
-                    .format(vk::Format::R32G32B32_SFLOAT)
-                    .offset(offset_of!(VertexInput, position) as u32)
-                    .build(),
-                VertexInputAttributeDescription::builder()
-                    .location(1)
-                    .binding(0)
-                    .format(vk::Format::R32G32B32A32_SFLOAT)
-                    .offset(offset_of!(VertexInput, color) as u32)
-                    .build()
-            ];
+        let push_constant_range = vk::PushConstantRange::builder()
+            .stage_flags(ShaderStageFlags::VERTEX)
+            .size(size_of::<Matrix4<f32>>() as u32)
+            .build();
 
-            let vert_in_asmb_info = vk::PipelineInputAssemblyStateCreateInfo
-            {
-                topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-                ..Default::default()
-            };
-
-            let push_constant_range = vk::PushConstantRange::builder()
-                .stage_flags(ShaderStageFlags::VERTEX)
-                .size(size_of::<Matrix4<f32>>() as u32)
-                .build();
-
-            let layout_info = vk::PipelineLayoutCreateInfo::builder()
-                .push_constant_ranges(&[push_constant_range])
-                .build();
-
-            let config = ShaderInfo
-            {
-                vert_spv_file: include_bytes!("shaders/mesh/main.spv_v").to_vec(),
-                frag_spv_file: include_bytes!("shaders/mesh/main.spv_f").to_vec(),
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .push_constant_ranges(&[push_constant_range])
+            .build();
+                    
+        MeshSystem
+        {
+            shader: Shader::new
+            (
+                &graphics.device,
+                &graphics.swapchain,
+                include_bytes!("shaders/mesh/main.spv_v").to_vec(),
+                include_bytes!("shaders/mesh/main.spv_f").to_vec(),
                 layout_info,
                 vert_in_bind_desc,
                 vert_in_attr_desc,
                 vert_in_asmb_info
-            };
-
-            MeshSystem
-            {
-                shader: Shader::new
-                (
-                    &graphics.device,
-                    &graphics.swapchain,
-                    config
-                ),
-                storage: Storage::new()
-            }
+            ),
+            storage: Storage::new()
         }
     }
 

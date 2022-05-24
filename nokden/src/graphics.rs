@@ -945,20 +945,28 @@ pub struct Shader
 
 impl Shader
 {
-    pub unsafe fn new
+    pub fn new
     (
         device: &Device,
-        swapchain: &Swapchain,
-        config: ShaderInfo
+        swapchain: &Swapchain,    
+        vert_spv: Vec<u8>,
+        frag_spv: Vec<u8>,
+        layout_info: vk::PipelineLayoutCreateInfo,
+        vert_in_bind_desc: Vec<VertexInputBindingDescription>,
+        vert_in_attr_desc: Vec<VertexInputAttributeDescription>,
+        vert_in_asmb_info: vk::PipelineInputAssemblyStateCreateInfo
     )
     -> Shader
     {
-        let vertex = Self::create_shader_module(device, config.vert_spv_file);
-        let fragment = Self::create_shader_module(device, config.frag_spv_file);
+        let vertex = Self::create_shader_module(device, vert_spv);
+        let fragment = Self::create_shader_module(device, frag_spv);
+
+        let pipeline_layout = unsafe
+        {
+            device.logical.create_pipeline_layout(&layout_info, None).unwrap()
+        };
 
         let entry_point = CString::new(SHADER_ENTRY_NAME).unwrap();
-
-        let pipeline_layout = device.logical.create_pipeline_layout(&config.layout_info, None).unwrap();
 
         let shader_stage_create_infos = 
         [
@@ -980,8 +988,8 @@ impl Shader
         ];
 
         let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_attribute_descriptions(&config.vert_in_attr_desc)
-            .vertex_binding_descriptions(&config.vert_in_bind_desc);
+            .vertex_attribute_descriptions(&vert_in_attr_desc)
+            .vertex_binding_descriptions(&vert_in_bind_desc);
 
         let rasterization_info = vk::PipelineRasterizationStateCreateInfo
         {
@@ -1046,7 +1054,7 @@ impl Shader
         let graphic_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stage_create_infos)
             .vertex_input_state(&vert_input_info)
-            .input_assembly_state(&config.vert_in_asmb_info)
+            .input_assembly_state(&vert_in_asmb_info)
             .viewport_state(&viewport_state_info)
             .rasterization_state(&rasterization_info)
             .multisample_state(&multisampling_state_info)
@@ -1055,8 +1063,11 @@ impl Shader
             .dynamic_state(&dynamic_state_info)
             .layout(pipeline_layout)
             .render_pass(swapchain.renderpass);
-
-        let pipeline = device.logical.create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_info.build()], None).unwrap();
+        
+        let pipeline = unsafe
+        {
+            device.logical.create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_info.build()], None).unwrap()      
+        };
 
         Shader
         {
@@ -1067,7 +1078,7 @@ impl Shader
         }
     }
 
-    unsafe fn create_shader_module
+    fn create_shader_module
     (
         device: &Device,
         spv_bytes: Vec<u8>
@@ -1077,7 +1088,7 @@ impl Shader
         let mut seekable_bytes = Cursor::new(spv_bytes.as_slice());
         let binaries = util::read_spv::<Cursor<&[u8]>>(&mut seekable_bytes).unwrap();
         let module_create_info = vk::ShaderModuleCreateInfo::builder().code(&binaries);
-        device.logical.create_shader_module(&module_create_info, None).unwrap()
+        unsafe { device.logical.create_shader_module(&module_create_info, None).unwrap() }
     }
 
     pub fn destroy
@@ -1095,14 +1106,4 @@ impl Shader
             device.logical.destroy_pipeline_layout(self.pipeline_layout, None);
         }
     }
-}
-
-pub struct ShaderInfo
-{
-    pub vert_spv_file: Vec<u8>,
-    pub frag_spv_file: Vec<u8>,
-    pub layout_info: vk::PipelineLayoutCreateInfo,
-    pub vert_in_bind_desc: Vec<VertexInputBindingDescription>,
-    pub vert_in_attr_desc: Vec<VertexInputAttributeDescription>,
-    pub vert_in_asmb_info: vk::PipelineInputAssemblyStateCreateInfo
 }
