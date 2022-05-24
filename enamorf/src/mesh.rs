@@ -78,7 +78,12 @@ impl MeshSystem
 
             MeshSystem
             {
-                shader: Shader::new(&graphics.device, &graphics.swapchain, config),
+                shader: Shader::new
+                (
+                    &graphics.device,
+                    &graphics.swapchain,
+                    config
+                ),
                 storage: Storage::new()
             }
         }

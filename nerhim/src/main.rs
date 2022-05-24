@@ -95,7 +95,7 @@ for Application
             self.input.register_device_events(&event)
         }        
 
-        let world_vp = self.graphics.camera_matrix.projection.as_matrix() * self.graphics.camera_matrix.view.to_homogeneous();
+        let world_vp = self.graphics.world_projection.projection.as_matrix() * self.graphics.world_projection.view.to_homogeneous();
         let frame_index = self.graphics.frame_start();
         self.meshes.update(&self.graphics, &self.nodes, &world_vp);
         self.graphics.frame_end(frame_index);

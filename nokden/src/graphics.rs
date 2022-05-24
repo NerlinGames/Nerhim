@@ -34,21 +34,21 @@ pub struct GraphicsSystem
     resolution_height: u32,
 
     fov_y: f32,
-    pub camera_matrix: WorldViewProjection,
+    pub world_projection: WorldViewProjection,
 
     //view_widget:
-    pub gui_matrix: GUIProjection,
+    pub gui_projection: GUIProjection,
 
     instance: Instance,
 
-    surface_ld: khr::Surface,
-    surface: vk::SurfaceKHR,
+    surface: khr::Surface,
+    surface_khr: vk::SurfaceKHR,
 
     pub device: Device,
     pub swapchain: Swapchain,
 
-    debug_clbk: vk::DebugUtilsMessengerEXT,
-    debug_utils_ld: ext::DebugUtils,
+    debug_utils_msg: vk::DebugUtilsMessengerEXT,
+    debug_utils: ext::DebugUtils,
 }
 
 impl GraphicsSystem
@@ -61,7 +61,7 @@ impl GraphicsSystem
     {
         let entry = unsafe { Entry::load().unwrap() };
 
-        let (instance, debug_clbk, debug_utils_ld) =
+        let (instance, debug_utils_msg, debug_utils) =
         {
             let application_info = vk::ApplicationInfo::builder()
                 //.application_name(&app_name)
@@ -87,16 +87,16 @@ impl GraphicsSystem
                 .message_type(vk::DebugUtilsMessageTypeFlagsEXT::GENERAL)
                 .pfn_user_callback(Some(Self::messenger_callback));
 
-            let debug_utils_loader = ext::DebugUtils::new(&entry, &instance);
-            let debug_callback = unsafe { debug_utils_loader.create_debug_utils_messenger(&debug_info, None).unwrap() };
+            let debug_utils = ext::DebugUtils::new(&entry, &instance);
+            let debug_callback = unsafe { debug_utils.create_debug_utils_messenger(&debug_info, None).unwrap() };
 
-            (instance, debug_callback, debug_utils_loader)
+            (instance, debug_callback, debug_utils)
         };
 
-        let surface_ld = khr::Surface::new(&entry, &instance);
-        let surface = unsafe { ash_window::create_surface(&entry, &instance, window, None).unwrap() };
-        let device = Device::new(&instance, &surface_ld, &surface);
-        let swapchain = Swapchain::new(&instance, &device, &surface_ld, &surface, &window);
+        let surface = khr::Surface::new(&entry, &instance);
+        let surface_khr = unsafe { ash_window::create_surface(&entry, &instance, window, None).unwrap() };
+        let device = Device::new(&instance, &surface, &surface_khr);
+        let swapchain = Swapchain::new(&instance, &device, &surface, &surface_khr, &window);
 
         device.submit_setup(&swapchain);
 
@@ -106,20 +106,13 @@ impl GraphicsSystem
             resolution_width: defaults::RESOLUTION_WIDTH,
             resolution_height: defaults::RESOLUTION_HEIGHT,
             fov_y: defaults::FOV_Y,
-            camera_matrix: WorldViewProjection
-            {
-                projection: Perspective3::new(defaults::RESOLUTION_WIDTH as f32 / defaults::RESOLUTION_HEIGHT as f32, defaults::FOV_Y, defaults::WORLD_Z_NEAR, defaults::WORLD_Z_FAR),
-                view: Isometry3::look_at_rh(&Point3::new(0.0, 0.0, -5.0), &Point3::origin(), &Vector3::y())
-            },
-            //gui_matrix: GUIProjection::orthographic_vulkan(-1.0, 1.0, -1.0, 1.0),
-            gui_matrix: GUIProjection::orthographic_vulkan(),
-            //vulkan
-            //entry,
+            world_projection: WorldViewProjection::perspective(),           
+            gui_projection: GUIProjection::orthographic(),
             instance,
-            surface_ld,
             surface,
-            debug_clbk,
-            debug_utils_ld,
+            surface_khr,
+            debug_utils_msg,
+            debug_utils,
             device,
             swapchain
         }
@@ -273,9 +266,9 @@ impl GraphicsSystem
 
             self.swapchain.loader.destroy_swapchain(self.swapchain.swapchain, None);
             self.device.logical.destroy_device(None);
-            self.surface_ld.destroy_surface(self.surface, None);
+            self.surface.destroy_surface(self.surface_khr, None);
 
-            self.debug_utils_ld.destroy_debug_utils_messenger(self.debug_clbk, None);
+            self.debug_utils.destroy_debug_utils_messenger(self.debug_utils_msg, None);
             self.instance.destroy_instance(None);
         }
     }
@@ -305,6 +298,31 @@ pub struct WorldViewProjection
     pub view: Isometry3<f32>,
 }
 
+impl WorldViewProjection
+{
+    fn perspective
+    ()    
+    -> WorldViewProjection
+    {
+        WorldViewProjection
+        {
+            projection: Perspective3::new
+            (
+                defaults::RESOLUTION_WIDTH as f32 / defaults::RESOLUTION_HEIGHT as f32,
+                defaults::FOV_Y,
+                defaults::WORLD_Z_NEAR,
+                defaults::WORLD_Z_FAR
+            ),
+            view: Isometry3::look_at_rh
+            (
+                &Point3::new(0.0, 0.0, -5.0),
+                &Point3::origin(),
+                &Vector3::y()
+            )
+        }
+    }
+}
+
 pub struct GUIProjection
 {
     pub projection: Matrix4<f32>
@@ -312,7 +330,9 @@ pub struct GUIProjection
 
 impl GUIProjection
 {
-    fn orthographic_vulkan() -> GUIProjection
+    fn orthographic
+    ()
+    -> GUIProjection
     {
         let width = defaults::RESOLUTION_WIDTH as f32;
         let height = defaults::RESOLUTION_HEIGHT as f32;
@@ -330,7 +350,28 @@ impl GUIProjection
         let bound_horizontal = -(right + left) / (right - left);
         let bound_vertical = -(bottom + top) / (bottom - top);
 
-        GUIProjection{ projection: Matrix4::new(left_right, 0.0, 0.0, 0.0, 0.0, top_bottom, 0.0, 0.0, 0.0, 0.0, near_far, 0.0, bound_horizontal, bound_vertical, 0.0, 1.0) }
+        GUIProjection
+        {
+            projection: Matrix4::new
+            (
+                left_right,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                top_bottom,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                near_far,
+                0.0,
+                bound_horizontal,
+                bound_vertical,
+                0.0,
+                1.0
+            )
+        }
     }
 }
 
@@ -915,107 +956,107 @@ impl Shader
         let vertex = Self::create_shader_module(device, config.vert_spv_file);
         let fragment = Self::create_shader_module(device, config.frag_spv_file);
 
-        let (pipeline, pipeline_layout) =
+        let entry_point = CString::new(SHADER_ENTRY_NAME).unwrap();
+
+        let pipeline_layout = device.logical.create_pipeline_layout(&config.layout_info, None).unwrap();
+
+        let shader_stage_create_infos = 
+        [
+            vk::PipelineShaderStageCreateInfo
             {
-                let entry_point = CString::new(SHADER_ENTRY_NAME).unwrap();
+                module: vertex,
+                p_name: entry_point.as_ptr(),
+                stage: vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            },
+            vk::PipelineShaderStageCreateInfo
+            {
+                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+                module: fragment,
+                p_name: entry_point.as_ptr(),
+                stage: vk::ShaderStageFlags::FRAGMENT,
+                ..Default::default()
+            }
+        ];
 
-                let pipeline_layout = device.logical.create_pipeline_layout(&config.layout_info, None).unwrap();
+        let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_attribute_descriptions(&config.vert_in_attr_desc)
+            .vertex_binding_descriptions(&config.vert_in_bind_desc);
 
-                let shader_stage_create_infos = [
-                    vk::PipelineShaderStageCreateInfo
-                    {
-                        module: vertex,
-                        p_name: entry_point.as_ptr(),
-                        stage: vk::ShaderStageFlags::VERTEX,
-                        ..Default::default()
-                    },
-                    vk::PipelineShaderStageCreateInfo
-                    {
-                        s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        module: fragment,
-                        p_name: entry_point.as_ptr(),
-                        stage: vk::ShaderStageFlags::FRAGMENT,
-                        ..Default::default()
-                    }];
+        let rasterization_info = vk::PipelineRasterizationStateCreateInfo
+        {
+            front_face: vk::FrontFace::CLOCKWISE,
+            line_width: 1.0,
+            polygon_mode: vk::PolygonMode::FILL,
+            ..Default::default()
+        };
 
-                let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
-                    .vertex_attribute_descriptions(&config.vert_in_attr_desc)
-                    .vertex_binding_descriptions(&config.vert_in_bind_desc);
+        let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo
+        {
+            rasterization_samples: vk::SampleCountFlags::TYPE_1,
+            ..Default::default()
+        };
 
-                let rasterization_info = vk::PipelineRasterizationStateCreateInfo
-                {
-                    front_face: vk::FrontFace::CLOCKWISE,
-                    line_width: 1.0,
-                    polygon_mode: vk::PolygonMode::FILL,
-                    ..Default::default()
-                };
+        let noop_stencil_state = vk::StencilOpState
+        {
+            fail_op: vk::StencilOp::KEEP,
+            pass_op: vk::StencilOp::KEEP,
+            depth_fail_op: vk::StencilOp::KEEP,
+            compare_op: vk::CompareOp::ALWAYS,
+            ..Default::default()
+        };
 
-                let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo
-                {
-                    rasterization_samples: vk::SampleCountFlags::TYPE_1,
-                    ..Default::default()
-                };
+        let depth_state_info = vk::PipelineDepthStencilStateCreateInfo
+        {
+            depth_test_enable: 1,
+            depth_write_enable: 1,
+            depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
+            front: noop_stencil_state,
+            back: noop_stencil_state,
+            max_depth_bounds: 1.0,
+            ..Default::default()
+        };
 
-                let noop_stencil_state = vk::StencilOpState
-                {
-                    fail_op: vk::StencilOp::KEEP,
-                    pass_op: vk::StencilOp::KEEP,
-                    depth_fail_op: vk::StencilOp::KEEP,
-                    compare_op: vk::CompareOp::ALWAYS,
-                    ..Default::default()
-                };
+        let color_blend_attachment_states =
+        [
+            vk::PipelineColorBlendAttachmentState
+            {
+                blend_enable: vk::FALSE,
+                src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
+                dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
+                color_blend_op: vk::BlendOp::ADD,
+                src_alpha_blend_factor: vk::BlendFactor::ZERO,
+                dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+                alpha_blend_op: vk::BlendOp::ADD,
+                color_write_mask: vk::ColorComponentFlags::RGBA,
+            }
+        ];
 
-                let depth_state_info = vk::PipelineDepthStencilStateCreateInfo
-                {
-                    depth_test_enable: 1,
-                    depth_write_enable: 1,
-                    depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
-                    front: noop_stencil_state,
-                    back: noop_stencil_state,
-                    max_depth_bounds: 1.0,
-                    ..Default::default()
-                };
+        let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+            .logic_op(vk::LogicOp::CLEAR)
+            .attachments(&color_blend_attachment_states);
 
-                let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState
-                {
-                    blend_enable: vk::FALSE,
-                    src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
-                    dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
-                    color_blend_op: vk::BlendOp::ADD,
-                    src_alpha_blend_factor: vk::BlendFactor::ZERO,
-                    dst_alpha_blend_factor: vk::BlendFactor::ZERO,
-                    alpha_blend_op: vk::BlendOp::ADD,
-                    color_write_mask: vk::ColorComponentFlags::RGBA,
-                }];
+        let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state);
 
-                let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-                    .logic_op(vk::LogicOp::CLEAR)
-                    .attachments(&color_blend_attachment_states);
+        let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
+            .scissors(&swapchain.scissors)
+            .viewports(&swapchain.viewports);
 
-                let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-                let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state);
+        let graphic_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&shader_stage_create_infos)
+            .vertex_input_state(&vert_input_info)
+            .input_assembly_state(&config.vert_in_asmb_info)
+            .viewport_state(&viewport_state_info)
+            .rasterization_state(&rasterization_info)
+            .multisample_state(&multisampling_state_info)
+            .depth_stencil_state(&depth_state_info)
+            .color_blend_state(&color_blend_state)
+            .dynamic_state(&dynamic_state_info)
+            .layout(pipeline_layout)
+            .render_pass(swapchain.renderpass);
 
-                let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
-                    .scissors(&swapchain.scissors)
-                    .viewports(&swapchain.viewports);
-
-                let graphic_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
-                    .stages(&shader_stage_create_infos)
-                    .vertex_input_state(&vert_input_info)
-                    .input_assembly_state(&config.vert_in_asmb_info)
-                    .viewport_state(&viewport_state_info)
-                    .rasterization_state(&rasterization_info)
-                    .multisample_state(&multisampling_state_info)
-                    .depth_stencil_state(&depth_state_info)
-                    .color_blend_state(&color_blend_state)
-                    .dynamic_state(&dynamic_state_info)
-                    .layout(pipeline_layout)
-                    .render_pass(swapchain.renderpass);
-
-                let pipeline = device.logical.create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_info.build()], None).unwrap();
-
-                (pipeline, pipeline_layout)
-            };
+        let pipeline = device.logical.create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_info.build()], None).unwrap();
 
         Shader
         {
