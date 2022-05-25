@@ -27,7 +27,7 @@ const SHADER_ENTRY_NAME: &str = "main";
 
 pub struct PresentIndex(u32);
 
-pub struct GraphicsSystem
+pub struct GraphicsSystem // TODO Requires Vulkan extension checking functions to avoid startup panics.
 {
     fullscreen: bool,   // TODO Vulkan needs to resize buffers or it will panic.
     resolution_width: u32,
@@ -61,41 +61,47 @@ impl GraphicsSystem
     {
         let entry = unsafe { Entry::load().unwrap() };
 
-        let (instance, debug_utils_msg, debug_utils) =
-        {
-            let application_info = vk::ApplicationInfo::builder()
-                //.application_name(&app_name)
-                //.application_version(0)
-                //.engine_name(&engine_name)
-                //.engine_version(0)
-                .api_version(vk::make_version(1, 0, 0));
+        let application_info = vk::ApplicationInfo::builder().api_version(vk::API_VERSION_1_1);
 
-            let mut extensions = ash_window::enumerate_required_extensions(window).unwrap().to_vec();
-            extensions.push(ext::DebugUtils::name().as_ptr());
+        let mut extensions: Vec<*const c_char> = ash_window::enumerate_required_extensions(window).unwrap().to_vec();
+        extensions.push(ext::DebugUtils::name().as_ptr());
 
-            let layers = Self::debug_layers();
+        let layers = Self::debug_layers();
 
-            let create_info = vk::InstanceCreateInfo::builder()
-                .application_info(&application_info)
-                .enabled_extension_names(&extensions)
-                .enabled_layer_names(&layers);
+        let create_info = vk::InstanceCreateInfo::builder()
+            .application_info(&application_info)
+            .enabled_extension_names(&extensions)
+            .enabled_layer_names(&layers);
 
-            let instance = unsafe { entry.create_instance(&create_info, None).unwrap() };
+        let instance = unsafe { entry.create_instance(&create_info, None).unwrap() };        
 
-            let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-                .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING /*| vk::DebugUtilsMessageSeverityFlagsEXT::INFO*/)
-                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::GENERAL)
-                .pfn_user_callback(Some(Self::messenger_callback));
+        let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+            .message_severity
+            (
+                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                //| vk::DebugUtilsMessageSeverityFlagsEXT::INFO
+            )
+            .message_type(vk::DebugUtilsMessageTypeFlagsEXT::GENERAL)
+            .pfn_user_callback(Some(Self::messenger_callback));
 
-            let debug_utils = ext::DebugUtils::new(&entry, &instance);
-            let debug_callback = unsafe { debug_utils.create_debug_utils_messenger(&debug_info, None).unwrap() };
-
-            (instance, debug_callback, debug_utils)
-        };
+        let debug_utils = ext::DebugUtils::new(&entry, &instance);
+        let debug_utils_msg = unsafe { debug_utils.create_debug_utils_messenger(&debug_info, None).unwrap() };
 
         let surface = khr::Surface::new(&entry, &instance);
         let surface_khr = unsafe { ash_window::create_surface(&entry, &instance, window, None).unwrap() };
+        
         let device = Device::new(&instance, &surface, &surface_khr);
+        Self::check_device_extensions
+        (
+            &instance,
+            &device.physical,
+            &[
+                khr::AccelerationStructure::name().to_str().unwrap().to_string(),
+                khr::RayTracingPipeline::name().to_str().unwrap().to_string(),
+            ]
+        );
+        
         let swapchain = Swapchain::new(&instance, &device, &surface, &surface_khr, &window);
 
         device.submit_setup(&swapchain);
@@ -115,6 +121,69 @@ impl GraphicsSystem
             debug_utils,
             device,
             swapchain
+        }
+    }    
+
+    fn check_device_extensions
+    (
+        instance: &ash::Instance,
+        physical: &vk::PhysicalDevice,
+        required_extensions: &[String]
+    )
+    {   
+        let mut all_supported = true; 
+        let extensions = unsafe { instance.enumerate_device_extension_properties(*physical).unwrap() };
+        let mut supported: Vec<String> = Vec::new();
+        
+        for required in required_extensions
+        {
+            if !extensions.iter().any
+            (
+                |extension|
+                {
+                    let extension_string = unsafe { CStr::from_ptr(extension.extension_name.as_ptr()).to_str().unwrap() };
+
+                    if extension_string == required
+                    {
+                        supported.push(format!("SUPPORTED- {}", required));
+                        true
+                    }
+                    else
+                    {                        
+                        false
+                    }
+                }
+            )
+            {
+                supported.push(format!("MISSING - {}", required));
+                all_supported = false;
+            }
+        }
+
+        println!("Used device extensions:");
+        for extension in supported
+        {
+            println!("\t{}", extension);
+        }
+
+        if !all_supported
+        {
+            panic!("System requires all extensions to be supported.");
+        }
+    }
+
+    fn print_extensions // TODO Needs console command.
+    (
+        &self
+    )
+    {    
+        let extensions = unsafe { self.instance.enumerate_device_extension_properties(self.device.physical).unwrap() };
+        
+        println!("List device extensions:");
+        for extension in extensions
+        {
+            //let string = unsafe { CStr::from_ptr(extension.extension_name.as_ptr()).to_str().unwrap() };
+            println!("\t{}", unsafe { CStr::from_ptr(extension.extension_name.as_ptr()).to_str().unwrap() });
         }
     }
 
@@ -199,12 +268,18 @@ impl GraphicsSystem
         let properties = unsafe { self.instance.get_physical_device_properties(self.device.physical) };
         let device_type = match properties.device_type
         {
-            vk::PhysicalDeviceType::DISCRETE_GPU => "Dedicated",
-            _ => "Unknown Device Type",
+            vk::PhysicalDeviceType::DISCRETE_GPU => "Dedicated".to_string(),
+            vk::PhysicalDeviceType::INTEGRATED_GPU => "Integrated".to_string(),
+            invalid => format!("Invalid device type code: {:#?}",  invalid)
         };
         let device = unsafe { CStr::from_ptr(properties.device_name.as_ptr()).to_str().unwrap() };
 
-        Info { api: "Vulkan".to_string(), device: device.to_string(), device_type: device_type.to_string() }
+        Info
+        {
+            api: "Vulkan".to_string(),
+            device: device.to_string(),
+            device_type
+        }
     }
 
     unsafe extern "system" fn messenger_callback
@@ -276,10 +351,11 @@ impl GraphicsSystem
     #[cfg(debug_assertions)]
     fn debug_layers
     ()
-    -> Vec<*const c_char> // TODO Does not work under PoPOS.
-    {
-        //let layers = vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
-        //layers.iter().map(|item| item.as_ptr()).collect()
+    -> Vec<*const i8> // TODO Does not work under PopOS only Windows.
+    {        
+        /*let mut layers: Vec<*const c_char>  = Vec::new();// vec![/*CString::new("VK_LAYER_KHRONOS_validation").unwrap(),*/ CString::new("VK_LAYER_LUNARG_standard_validation").unwrap()];
+        layers.push("VK_LAYER_LUNARG_standard_validation".as_ptr() as *const c_char);
+        //layers.iter().map(|item| item.as_ptr()).collect::<>();*/
         Vec::new()
     }
 
@@ -428,14 +504,17 @@ impl Device
                     device_count if device_count == 0 => panic!("No device with Vulkan support found."),
                     _ => *devices
                         .iter()
-                        .find(|x|
+                        .find
+                        (
+                            |x|
                             {
                                 match instance.get_physical_device_properties(**x).device_type
                                 {
                                     vk::PhysicalDeviceType::DISCRETE_GPU => true,
                                     _ => false
                                 }
-                            })
+                            }
+                        )
                         .unwrap()
                 }
             };
@@ -446,14 +525,17 @@ impl Device
                 queue_properties
                     .iter()
                     .enumerate()
-                    .filter_map(|(i, info)|
-                    {
-                        match info.queue_flags.contains(vk::QueueFlags::GRAPHICS) && surface_ld.get_physical_device_surface_support(physical, i as u32, *surface).unwrap()
+                    .filter_map
+                    (
+                        |(i, info)|
                         {
-                            true => Some(i),
-                            false => None
+                            match info.queue_flags.contains(vk::QueueFlags::GRAPHICS) && surface_ld.get_physical_device_surface_support(physical, i as u32, *surface).unwrap()
+                            {
+                                true => Some(i),
+                                false => None
+                            }
                         }
-                    })
+                    )
                     .next()
                     .unwrap() as u32
             };
@@ -777,28 +859,39 @@ impl Swapchain
         let images = unsafe { swapchain_ld.get_swapchain_images(*swapchain).unwrap() };
         let image_views: Vec<vk::ImageView> = images
             .iter()
-            .map(|&x|
-            {
-                let create_view_info = vk::ImageViewCreateInfo::builder()
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(surface_format.format)
-                    .components(vk::ComponentMapping {
-                        r: vk::ComponentSwizzle::R,
-                        g: vk::ComponentSwizzle::G,
-                        b: vk::ComponentSwizzle::B,
-                        a: vk::ComponentSwizzle::A,
-                    })
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .image(x);
+            .map
+            (
+                |&x|
+                {
+                    let create_view_info = vk::ImageViewCreateInfo::builder()
+                        .view_type(vk::ImageViewType::TYPE_2D)
+                        .format(surface_format.format)
+                        .components
+                        (
+                            vk::ComponentMapping 
+                            {
+                                r: vk::ComponentSwizzle::R,
+                                g: vk::ComponentSwizzle::G,
+                                b: vk::ComponentSwizzle::B,
+                                a: vk::ComponentSwizzle::A,
+                            }
+                        )
+                        .subresource_range
+                        (
+                            vk::ImageSubresourceRange
+                            {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            }
+                        )
+                        .image(x);
 
-                unsafe { device.logical.create_image_view(&create_view_info, None).unwrap() }
-            })
+                    unsafe { device.logical.create_image_view(&create_view_info, None).unwrap() }
+                }
+            )
             .collect();
 
         (images, image_views)
@@ -831,7 +924,8 @@ impl Swapchain
         unsafe { device.logical.bind_image_memory(depth_image, depth_image_memory, 0).unwrap() };
 
         let depth_image_view_info = vk::ImageViewCreateInfo::builder()
-            .subresource_range(
+            .subresource_range
+            (
                 vk::ImageSubresourceRange::builder()
                     .aspect_mask(vk::ImageAspectFlags::DEPTH)
                     .level_count(1)
