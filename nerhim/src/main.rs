@@ -44,6 +44,20 @@ for Application
         env!("CARGO_PKG_VERSION")
     }
 
+    fn engine_name
+    ()
+    -> &'static str
+    {
+        enamorf::engine_name()
+    }
+
+    fn engine_version
+    ()
+    -> &'static str
+    {
+        enamorf::engine_version()
+    }
+
     fn new
     (
         framework: &mut Framework
@@ -131,5 +145,5 @@ for Application
             }
             SaveLoad::Idle => ()
         }        
-    }
+    }   
 }

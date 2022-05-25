@@ -25,8 +25,9 @@ pub fn run
     let mut device_events: Vec<DeviceEvent> = Vec::new();
     let mut window_events: Vec<WindowEvent> = Vec::new();    
 
-    println!("Application: {} ({})", TApplication::name(), TApplication::version());
-    println!("Framework: {} ({})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    println!("Application:\t{} ({})", TApplication::name(), TApplication::version());
+    println!("Engine:\t\t{} ({})", TApplication::engine_name(), TApplication::engine_version());
+    println!("Framework:\t{} ({})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
     let mut framework = Framework::new(&event_loop, TApplication::name());
     let mut application = TApplication::new(&mut framework);
@@ -83,7 +84,7 @@ pub fn run
                     }
                     ControlFlow::Exit => 
                     {
-                        println!("... app shutdown update ...");
+                        //println!("... app shutdown update ...");
                     },
                     _ => unreachable!()
                 }               
@@ -567,6 +568,14 @@ pub trait ApplicationEvents
     ()
     -> &'static str;
     
+    fn engine_name
+    ()
+    -> &'static str;
+
+    fn engine_version
+    ()
+    -> &'static str;
+
     fn new
     (
         framework: &mut Framework

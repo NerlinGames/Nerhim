@@ -145,7 +145,7 @@ impl GraphicsSystem
 
                     if extension_string == required
                     {
-                        supported.push(format!("SUPPORTED- {}", required));
+                        supported.push(format!("SUPPORTED - {}", required));
                         true
                     }
                     else
