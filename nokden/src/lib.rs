@@ -11,6 +11,7 @@ use std::sync::{Arc, RwLock, RwLockWriteGuard, RwLockReadGuard};
 use winit::window::{Window, WindowBuilder};
 use winit::event::{WindowEvent, DeviceEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+use nalgebra;
 
 pub fn run
 <
@@ -19,6 +20,8 @@ pub fn run
 ()
 {
     let event_loop = EventLoop::new();
+    let console_deltaprint = ConsoleCommand::new("deltaprint", Vec::new());
+    let console_fpsprint = ConsoleCommand::new("fpsprint", Vec::new());
     let console_quit = ConsoleCommand::new("quit", Vec::new());
     let console_save = ConsoleCommand::new("save", Vec::new());
     let console_load = ConsoleCommand::new("load", Vec::new());
@@ -47,6 +50,8 @@ pub fn run
                 {
                     ControlFlow::Poll =>
                     {
+                        framework.delta();
+
                         if !framework.run
                         {
                             *control_flow = ControlFlow::Exit
@@ -54,6 +59,16 @@ pub fn run
 
                         if !framework.command.keyword.is_empty()
                         {  
+                            if framework.command == console_fpsprint
+                            {
+                                framework.fps_print.toggle();
+                            }
+
+                            if framework.command == console_deltaprint
+                            {
+                                framework.delta_print.toggle();
+                            }                            
+
                             if framework.command == console_quit
                             {
                                 framework.shutdown();
@@ -72,15 +87,15 @@ pub fn run
                             application.console(&mut framework);
                             framework.command.keyword.clear();
                         }
-                        
-                        application.update(&mut framework);
+                                                
+                        application.update(&mut framework);                        
                         application.update_engine(&device_events, &window_events);
                         application.save_load(&mut framework);
                         device_events.clear();
-                        window_events.clear();
-                        framework.frame_delta.reset();
+                        window_events.clear();                        
                         framework.frames.count();
-                        framework.fps.count(false);
+                        framework.fps.count(framework.fps_print);
+                        framework.frame_delta.reset(framework.delta_print);
                     }
                     ControlFlow::Exit => 
                     {
@@ -164,7 +179,7 @@ Storage
     {
         self.datas.push(Arc::new(RwLock::new(data)));
         self.usage_count.push(1);
-
+        
         Handle
         {
             index: (self.datas.len()) - 1,
@@ -242,6 +257,7 @@ enum Register
     Removed(RegisterInfo)
 }
 
+#[derive(Debug)]
 pub struct Handle
 <
     TComponent
@@ -261,8 +277,10 @@ pub enum SaveLoad
 pub struct Framework
 {
     asset_path: PathBuf,
+    pub fps_print: bool,
     fps: CPS,
     frames: Frames,
+    pub delta_print: bool,
     frame_delta: Delta,
     window: Window, // TODO Needs to be moved to graphics core.
     run: bool,
@@ -341,8 +359,10 @@ impl Framework
         Framework
         {
             asset_path,
+            fps_print: false,
             fps: CPS::new("Frames Per Second"),
             frames: Frames::new(),
+            delta_print: false,
             frame_delta: Delta::new(),
             window,
             run: true,
@@ -724,7 +744,11 @@ impl Frames
     }
 }
 
-pub struct Delta(Instant);
+pub struct Delta
+{
+    duration: Instant,
+    last_frame: f32
+}
 
 impl Delta
 {
@@ -732,15 +756,25 @@ impl Delta
     ()
     -> Delta
     {
-        Delta(Instant::now())
+        Delta
+        {
+            duration: Instant::now(),
+            last_frame: 0.0
+        }
     }
 
     pub fn reset
     (
-        &mut self
+        &mut self,
+        print: bool
     )
-    {
-        self.0 = Instant::now()
+    {        
+        self.last_frame = self.duration.elapsed().as_secs_f32();
+        self.duration = Instant::now();
+        if print
+        {
+            println!("Delta: {}", self.last_frame);
+        }        
     }
 
     pub fn delta
@@ -748,7 +782,31 @@ impl Delta
         &self
     ) -> f32
     {
-        self.0.elapsed().as_secs_f32()
+        //self.0.elapsed().as_secs_f32()
+        self.last_frame
+    }
+}
+
+pub trait ToggleBool
+{
+    fn toggle
+    (
+        &mut self
+    );
+}
+
+impl ToggleBool for bool
+{
+    fn toggle
+    (
+        &mut self
+    )
+    {
+        match self
+        {
+            true => *self = false,
+            false => *self = true,
+        }
     }
 }
 

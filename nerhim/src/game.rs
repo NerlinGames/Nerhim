@@ -1,6 +1,6 @@
 use std::path::{PathBuf, Path};
 use rayon::prelude::*;
-use nalgebra::{Transform3, Matrix, Isometry3, Vector3};
+use nalgebra::{Transform3, Matrix, Isometry3, Vector3, Point3, UnitComplex, RealField};
 use nokden::input::{InputSystem, Mapping, MethodKM};
 use nokden::graphics::{GraphicsSystem};
 use enamorf::{NodeSystem, Node};
@@ -19,6 +19,8 @@ pub struct GameSystem
     pub(crate) state: GameState,
 
     pub(crate) rotate_mesh: Handle<Node>,
+    pub(crate) y_angle: f32,
+
     pub(crate) bunch: Vec<Handle<Node>>,
 
     pub(crate) input_submit: Handle<Mapping>,
@@ -36,7 +38,7 @@ impl GameSystem
     (        
         input: &mut InputSystem,
         nodes: &mut NodeSystem,
-        graphics: &GraphicsSystem,
+        graphics: &mut GraphicsSystem,
         meshes: &mut MeshSystem,
         framework: &mut Framework
     )    
@@ -50,8 +52,17 @@ impl GameSystem
         let input_load = input.add_mapping(Mapping::new("Load", MethodKM::F5));
         let input_save = input.add_mapping(Mapping::new("Save", MethodKM::F6));
 
+        graphics.world_projection.view = Isometry3::look_at_rh
+        (
+            &Point3::new(0.0, 10.0, -5.0),
+            &Point3::origin(),
+            &Vector3::y()
+        );
+
         let rotate_mesh = nodes.add(Node::new());
-        meshes.load_obj(framework.asset_path(Path::new("neticas.obj")), &graphics, nodes.storage.duplicate(&rotate_mesh));
+        let world_origin = nodes.add(Node::new());        
+        meshes.load_obj(framework.asset_path(Path::new("neticas.obj")), &graphics, nodes.storage.duplicate(&rotate_mesh));        
+        meshes.load_obj(framework.asset_path(Path::new("nt_board.obj")), &graphics, nodes.storage.duplicate(&world_origin));
 
         let bunch = 
         {
@@ -67,7 +78,7 @@ impl GameSystem
         GameSystem
         {
             state: GameState::InMenu,
-            bunch,
+            bunch,//: Vec::new(),
             input_submit,
             input_close,            
             input_print_mapping,
@@ -75,7 +86,8 @@ impl GameSystem
             input_bind_mapping,
             input_load,
             input_save,
-            rotate_mesh
+            rotate_mesh,
+            y_angle: 0.0
         }
     }
 
@@ -101,13 +113,6 @@ impl GameSystem
         {
             input.default_mappings();
         }
-        
-        /*if self.input.check_once(&self.input_bind_mapping)
-        {
-            println!("Set custom bindings.");
-            let mut mapping = self.input.mappings.write(&self.input_open_console);
-            mapping.bind_custom(MethodKM::P);
-        }*/
 
         if input.check_once(&self.input_load)
         {
@@ -119,18 +124,23 @@ impl GameSystem
             framework.save_load(SaveLoad::Save);
         }
 
-        self.bunch.par_iter_mut().for_each
+        /*self.bunch.par_iter_mut().for_each
         (
             |node|
             {
                 let value = nodes.storage.read(node).matrix * 4.0;
             }
-        );
+        );*/       
 
-        const ROTATE_SPEED_Y: f32 = 1.0;
+        let ANGLE_PER_SECOND_Y = 90.0_f32.to_radians();
         let mut node = nodes.storage.write(&self.rotate_mesh);
-        let transform = Isometry3::<f32>::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, framework.delta() * ROTATE_SPEED_Y, 0.0));
-        node.isometry = &node.isometry * transform;
+        self.y_angle += framework.delta() * ANGLE_PER_SECOND_Y;
+        let rotation = Isometry3::<f32>::new
+        (
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, self.y_angle, 0.0)
+        );        
+        node.isometry = rotation;
     }
 }
 

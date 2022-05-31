@@ -19,25 +19,18 @@ pub fn engine_version
 
 pub struct NodeSystem
 {
-    root: Handle<Node>,
     pub storage: Storage<Node>
 }
 
 impl NodeSystem
 {
     pub fn new
-    (
-        root_node: Node
-    )
+    ()
     -> NodeSystem
     {
-        let mut nodes = Storage::new();
-        let root = nodes.add(root_node);
-
         NodeSystem
         {
-            root,
-            storage: nodes
+            storage: Storage::new()
         }
     }
 
@@ -48,21 +41,13 @@ impl NodeSystem
     )
     -> Handle<Node>
     {
-        self.storage.add(node)
-    }
-
-    pub fn attach_to_root
-    (
-        &mut self,
-        subtus: Handle<Node>
-    )
-    {
-        let mut root_node = self.storage.write(&self.root);
-        root_node.attach(subtus);
-        //self.root.access_mut().attach(&subtus)
+        let node = self.storage.add(node);
+        //println!("Add: {:?}", node);
+        node
     }
 }
 
+#[derive(Debug)]
 pub struct Node
 {
     pub enable: bool,

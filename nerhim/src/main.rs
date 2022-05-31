@@ -65,11 +65,11 @@ for Application
     -> Application
     {
         let mut input = InputSystem::new();
-        let mut nodes = NodeSystem::new(Node::new());
-        let graphics = GraphicsSystem::new(&framework.window());
+        let mut nodes = NodeSystem::new();        
+        let mut graphics = GraphicsSystem::new(&framework.window());
         let mut meshes = MeshSystem::new(&graphics);
 
-        let game = GameSystem::new(&mut input, &mut nodes, &graphics, &mut meshes, framework);
+        let game = GameSystem::new(&mut input, &mut nodes, &mut graphics, &mut meshes, framework);
         let console = ConsoleWidget::new(&mut input);                    
 
         Application

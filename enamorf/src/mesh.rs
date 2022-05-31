@@ -102,11 +102,11 @@ impl MeshSystem
                 dv.logical.cmd_bind_index_buffer(dv.draw_command_buffer, mesh.index_buffer, 0, vk::IndexType::UINT32);
 
                 let node = nodes.storage.read(&mesh.node);
-                
+
                 let mvp = view_projection * node.isometry.to_homogeneous();
                 let c_u32: *const Matrix4<f32> = &mvp;
                 let c_u8: *const u8 = c_u32 as *const _;
-                let bytes_matrix4: &[u8] = unsafe { slice::from_raw_parts(c_u8, mem::size_of::<Matrix4<f32>>()) };
+                let bytes_matrix4: &[u8] = slice::from_raw_parts(c_u8, mem::size_of::<Matrix4<f32>>());
                 dv.logical.cmd_push_constants(dv.draw_command_buffer, self.shader.pipeline_layout, ShaderStageFlags::VERTEX, 0, &bytes_matrix4);
 
                 dv.logical.cmd_draw_indexed(dv.draw_command_buffer, mesh.index_count, 1, 0, 0, 1);
@@ -126,6 +126,8 @@ impl MeshSystem
         let indices = models[0].mesh.indices.clone();
         let mut vertices = Vec::<VertexInput>::new();
 
+        println!("Models: {} {}", models[0].name, models.len());
+
         const VERTEX_PER_FACE: u8 = 3;
         for i in 0 .. models[0].mesh.positions.len() / VERTEX_PER_FACE as usize
         {
@@ -139,7 +141,7 @@ impl MeshSystem
                     color: [0.0, 1.0, 0.0, 1.0]
                 }
             );
-        }
+        }        
 
         self.storage.add(Mesh::new(&graphics, indices.clone(), vertices, node));
     }

@@ -27,7 +27,7 @@ const SHADER_ENTRY_NAME: &str = "main";
 
 pub struct PresentIndex(u32);
 
-pub struct GraphicsSystem // TODO Requires Vulkan extension checking functions to avoid startup panics.
+pub struct GraphicsSystem 
 {
     fullscreen: bool,   // TODO Vulkan needs to resize buffers or it will panic.
     resolution_width: u32,
