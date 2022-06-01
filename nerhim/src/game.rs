@@ -132,9 +132,10 @@ impl GameSystem
             }
         );*/       
 
-        let ANGLE_PER_SECOND_Y = 90.0_f32.to_radians();
+        // TODO Needs rotation function for Node. Needs to ditch y_angle variable and use multiply instead.
+        let angle_per_second_y = 90.0_f32.to_radians();
         let mut node = nodes.storage.write(&self.rotate_mesh);
-        self.y_angle += framework.delta() * ANGLE_PER_SECOND_Y;
+        self.y_angle += framework.delta() * angle_per_second_y;
         let rotation = Isometry3::<f32>::new
         (
             Vector3::new(0.0, 0.0, 0.0),

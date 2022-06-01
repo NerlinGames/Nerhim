@@ -99,7 +99,7 @@ impl MeshSystem
                 let mesh = mesh.read().unwrap();
 
                 dv.logical.cmd_bind_vertex_buffers(dv.draw_command_buffer, 0, &[mesh.vertex_buffer], &[0]);
-                dv.logical.cmd_bind_index_buffer(dv.draw_command_buffer, mesh.index_buffer, 0, vk::IndexType::UINT32);
+                dv.logical.cmd_bind_index_buffer(dv.draw_command_buffer, mesh.index_buffer, 0, vk::IndexType::UINT32); // TODO Needs to use UINT16.
 
                 let node = nodes.storage.read(&mesh.node);
 
@@ -122,28 +122,80 @@ impl MeshSystem
         node: Handle<Node>
     )
     {        
-        let (models, _) = tobj::load_obj(asset_path.0, true).unwrap();
-        let indices = models[0].mesh.indices.clone();
-        let mut vertices = Vec::<VertexInput>::new();
-
-        println!("Models: {} {}", models[0].name, models.len());
-
         const VERTEX_PER_FACE: u8 = 3;
-        for i in 0 .. models[0].mesh.positions.len() / VERTEX_PER_FACE as usize
+        let (models, textures) = tobj::load_obj(asset_path.0, false).unwrap();
+  
+        let mut colors = Vec::new(); // TODO Should not grouped with vertex positions but have its own index for reuse.
+        let mut indexes: Vec<u32> = Vec::new();
+        let mut positions = Vec::new();
+        for model in models
         {
-            vertices.push
+            for surface_index in &model.mesh.indices
+            {
+                indexes.push(*surface_index + positions.len() as u32);
+            }
+
+            for position_index in 0 .. model.mesh.positions.len() / VERTEX_PER_FACE as usize
+            {
+                positions.push
+                (
+                    [
+                        model.mesh.positions[position_index * 3],
+                        model.mesh.positions[position_index * 3 + 1],
+                        model.mesh.positions[position_index * 3 + 2]
+                    ]
+                );
+
+                colors.push
+                (
+                    [
+                        textures[model.mesh.material_id.unwrap()].diffuse[0],
+                        textures[model.mesh.material_id.unwrap()].diffuse[1],
+                        textures[model.mesh.material_id.unwrap()].diffuse[2],
+                        1.0
+                    ]
+                );
+            }
+        }
+
+        let mut input: Vec<VertexInput> = Vec::new();
+        for (index, position) in positions.iter().enumerate()
+        {
+            input.push
             (
                 VertexInput
                 {
-                    position: [models[0].mesh.positions[i * 3],
-                    models[0].mesh.positions[i * 3 + 1],
-                    models[0].mesh.positions[i * 3 + 2]],
-                    color: [0.0, 1.0, 0.0, 1.0]
+                    position:
+                    [
+                        position[0],
+                        position[1],
+                        position[2],                        
+                    ],
+                    color: colors[index]
                 }
             );
-        }        
+        }
 
-        self.storage.add(Mesh::new(&graphics, indices.clone(), vertices, node));
+        let mut highest = 0;
+        for vetex_index in &indexes
+        {
+            if *vetex_index > highest
+            {
+                highest = *vetex_index;
+            }
+        }
+
+        if ((input.len() - 1) as u32) < highest
+        {
+            panic!
+            (
+                "The highest vertex index value is not allowed to be higher than the count of inputs minus one. Max Input Index: {}, Highest Detected: {}",
+                input.len() - 1,
+                highest
+            );
+        }
+        
+        self.storage.add(Mesh::new(&graphics, indexes.clone(), input, node));
     }
 }
 

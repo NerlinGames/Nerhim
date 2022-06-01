@@ -2,7 +2,7 @@ mod game;
 
 use winit::event::{DeviceEvent, WindowEvent};
 use nokden::input::{InputSystem};
-use enamorf::{NodeSystem, Node};
+use enamorf::NodeSystem;
 use enamorf::mesh::{MeshSystem};
 use nokden::graphics::{GraphicsSystem};
 use nokden::{ApplicationEvents, Framework, SystemEvents, SaveLoad};
