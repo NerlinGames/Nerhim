@@ -13,7 +13,7 @@ use crate::{NodeSystem, Node};
 pub struct MeshSystem
 {
     shader: Shader,
-    pub storage: Storage<Mesh>
+    pub storage: Storage<MeshInstance>
 }
 
 impl MeshSystem
@@ -114,7 +114,7 @@ impl MeshSystem
         }
     }
 
-    pub fn load_obj
+    pub fn load_asset_obj
     (
         &mut self,
         asset_path: AssetPath,
@@ -195,13 +195,13 @@ impl MeshSystem
             );
         }
         
-        self.storage.add(Mesh::new(&graphics, indexes.clone(), input, node));
+        self.storage.add(MeshInstance::new(&graphics, indexes.clone(), input, node));
     }
 }
 
-pub struct Mesh
+pub struct MeshInstance
 {
-    pub node: Handle<Node>,
+    pub node: Handle<Node>, // TODO Perhaps needs to be without a handle.
     index_count: u32,
     index_buffer: vk::Buffer,
     index_memory: vk::DeviceMemory,
@@ -209,7 +209,7 @@ pub struct Mesh
     vertex_memory: vk::DeviceMemory
 }
 
-impl Mesh
+impl MeshInstance
 {
     pub fn new
     (
@@ -218,7 +218,7 @@ impl Mesh
         vertices: Vec<VertexInput>,
         node: Handle<Node>
     )
-    -> Mesh
+    -> MeshInstance
     {
         let device = &graphics.device;
 
@@ -274,7 +274,7 @@ impl Mesh
                 (vertex_buffer, vertex_memory)
             };
 
-            Mesh
+            MeshInstance
             {
                 node,
                 index_count: indices.len() as u32,

@@ -810,6 +810,30 @@ impl ToggleBool for bool
     }
 }
 
+/// The 2D sizes must be square.
+pub trait To2DSquare
+{
+    fn to_2D_square
+    (
+        &self,
+        square: u64
+    )
+    -> [u64; 2];
+}
+
+impl To2DSquare for u64 // TODO Perhaps could be u32.
+{
+    fn to_2D_square
+    (
+        &self,
+        square: u64
+    )
+    -> [u64; 2]
+    {        
+        [self / square, self % square]
+    }
+}
+
 #[cfg(debug_assertions)]
 pub fn platform
 ()

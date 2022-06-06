@@ -1,11 +1,14 @@
 use std::path::{PathBuf, Path};
 use rayon::prelude::*;
-use nalgebra::{Transform3, Matrix, Isometry3, Vector3, Point3, UnitComplex, RealField};
+use nalgebra::{Transform3, Matrix, Isometry3, Vector3, Point3, UnitComplex, RealField, Matrix4};
 use nokden::input::{InputSystem, Mapping, MethodKM};
 use nokden::graphics::{GraphicsSystem};
 use enamorf::{NodeSystem, Node};
 use enamorf::mesh::{MeshSystem};
-use nokden::{Handle, Framework, SystemEvents, SaveLoad, ConsoleCommandParameter, ConsoleCommand};
+use nokden::*;
+
+const MAP_SIZE: u8 = 10;
+const TILE_METERS: f32 = 20.0;
 
 pub(crate) enum GameState
 {
@@ -21,7 +24,7 @@ pub struct GameSystem
     pub(crate) rotate_mesh: Handle<Node>,
     pub(crate) y_angle: f32,
 
-    pub(crate) bunch: Vec<Handle<Node>>,
+    pub(crate) tiles: Vec<Handle<Node>>,
 
     pub(crate) input_submit: Handle<Mapping>,
     pub(crate) input_close: Handle<Mapping>,    
@@ -54,31 +57,53 @@ impl GameSystem
 
         graphics.world_projection.view = Isometry3::look_at_rh
         (
-            &Point3::new(0.0, 10.0, -5.0),
+            &Point3::new(0.0, 30.0, -50.0),
             &Point3::origin(),
             &Vector3::y()
         );
 
         let rotate_mesh = nodes.add(Node::new());
-        let world_origin = nodes.add(Node::new());        
-        meshes.load_obj(framework.asset_path(Path::new("neticas.obj")), &graphics, nodes.storage.duplicate(&rotate_mesh));        
-        meshes.load_obj(framework.asset_path(Path::new("nt_board.obj")), &graphics, nodes.storage.duplicate(&world_origin));
+        meshes.load_asset_obj(framework.asset_path(Path::new("neticas.obj")), &graphics, nodes.storage.duplicate(&rotate_mesh));                
 
-        let bunch = 
+        let tiles = 
         {
-            let mut bunch: Vec<Handle<Node>> = Vec::new();
-            for _ in 0..100000
+            let mut tiles: Vec<Handle<Node>> = Vec::new();
+            let tile_count = MAP_SIZE as u64 * MAP_SIZE as u64;
+            for index in 0..tile_count
             {
-                let handle = nodes.add(Node::new());
-                bunch.push(handle);
+                let position = index.to_2D_square(MAP_SIZE as u64);
+                let map_center = (MAP_SIZE / 2) as f32 * TILE_METERS + TILE_METERS / 2.0;
+                
+                let tile_node = nodes.add
+                (                    
+                    Node
+                    {
+                        enable: true,
+                        isometry: Isometry3::new
+                        (
+                            Vector3::new
+                            (
+                                position[0] as f32 * TILE_METERS - map_center,
+                                0.0,
+                                position[1] as f32 * TILE_METERS - map_center,
+                            ),
+                            Vector3::zeros()),
+                        matrix: Matrix4::identity(),
+                        subtus: Vec::new()
+                    }
+                );                
+
+                meshes.load_asset_obj(framework.asset_path(Path::new("grass_tree.obj")), &graphics, nodes.storage.duplicate(&tile_node));
+
+                tiles.push(tile_node);
             }            
-            bunch 
+            tiles 
         };
 
         GameSystem
         {
             state: GameState::InMenu,
-            bunch,//: Vec::new(),
+            tiles,//: Vec::new(),
             input_submit,
             input_close,            
             input_print_mapping,
@@ -138,7 +163,7 @@ impl GameSystem
         self.y_angle += framework.delta() * angle_per_second_y;
         let rotation = Isometry3::<f32>::new
         (
-            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 30.0, 0.0),
             Vector3::new(0.0, self.y_angle, 0.0)
         );        
         node.isometry = rotation;
