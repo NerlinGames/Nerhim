@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock, RwLockWriteGuard, RwLockReadGuard};
 use winit::window::{Window, WindowBuilder};
 use winit::event::{WindowEvent, DeviceEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
-use nalgebra;
+use nalgebra::{self, Isometry3, Vector3, Point3, Translation3};
 
 pub fn run
 <
@@ -831,6 +831,43 @@ impl To2DSquare for u64 // TODO Perhaps could be u32.
     -> [u64; 2]
     {        
         [self / square, self % square]
+    }
+}
+
+pub trait DeltaRotate
+{
+    fn delta_rotate
+    (
+        &mut self,
+        around_pivot: Point3<f32>,
+        angle_degrees: Vector3<f32>,
+        delta: f32
+    );
+}
+
+impl DeltaRotate for Isometry3<f32>
+{
+    // Rotates with degrees per second.
+    fn delta_rotate
+    (
+        &mut self,
+        around_pivot: Point3<f32>,
+        angle_degrees: Vector3<f32>,
+        delta: f32
+    )
+    {
+        let rotation = Isometry3::<f32>::new
+        (
+            Vector3::zeros(),
+            Vector3::new
+            (
+                delta * angle_degrees[0].to_radians(),
+                delta * angle_degrees[1].to_radians(),
+                delta * angle_degrees[2].to_radians(),
+            )
+        );        
+        *self *= rotation;
+        self.translation = Translation3::from(around_pivot);
     }
 }
 

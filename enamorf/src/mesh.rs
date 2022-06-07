@@ -6,14 +6,14 @@ use ash::util::Align;
 use nalgebra::base::Matrix4;
 use nalgebra::{Transform3, Matrix, Isometry3};
 use nokden::{Handle, Storage, offset_of, AssetPath};
-use nokden::graphics::{WorldViewProjection, Swapchain, Shader, GraphicsSystem};
-use crate::{NodeSystem, Node};
+use nokden::graphics::{Shader, GraphicsSystem};
 
 /// Renders a non-animated mesh at a specific location.
 pub struct MeshSystem
 {
     shader: Shader,
-    pub storage: Storage<MeshInstance>
+    pub assets: Storage<MeshAsset>,
+    pub instances: Storage<MeshInstance>
 }
 
 impl MeshSystem
@@ -77,7 +77,8 @@ impl MeshSystem
                 vert_in_attr_desc,
                 vert_in_asmb_info
             ),
-            storage: Storage::new()
+            assets: Storage::new(),
+            instances: Storage::new()
         }
     }
 
@@ -85,7 +86,6 @@ impl MeshSystem
     (
         &self,
         graphics: &GraphicsSystem,
-        nodes: &NodeSystem,
         view_projection: &Matrix4<f32>
     )
     {
@@ -94,22 +94,21 @@ impl MeshSystem
             let dv = &graphics.device;
             dv.logical.cmd_bind_pipeline(dv.draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, self.shader.pipeline[0]);
 
-            for mesh in self.storage.all()
+            for instance in self.instances.all()
             {
-                let mesh = mesh.read().unwrap();
+                let instance = instance.read().unwrap();
+                let mesh_asset = self.assets.read(&instance.mesh);
 
-                dv.logical.cmd_bind_vertex_buffers(dv.draw_command_buffer, 0, &[mesh.vertex_buffer], &[0]);
-                dv.logical.cmd_bind_index_buffer(dv.draw_command_buffer, mesh.index_buffer, 0, vk::IndexType::UINT32); // TODO Needs to use UINT16.
+                dv.logical.cmd_bind_vertex_buffers(dv.draw_command_buffer, 0, &[mesh_asset.vertex_buffer], &[0]);
+                dv.logical.cmd_bind_index_buffer(dv.draw_command_buffer, mesh_asset.index_buffer, 0, vk::IndexType::UINT32); // TODO Needs to use UINT16.
 
-                let node = nodes.storage.read(&mesh.node);
-
-                let mvp = view_projection * node.isometry.to_homogeneous();
+                let mvp = view_projection * instance.node.to_homogeneous();
                 let c_u32: *const Matrix4<f32> = &mvp;
                 let c_u8: *const u8 = c_u32 as *const _;
                 let bytes_matrix4: &[u8] = slice::from_raw_parts(c_u8, mem::size_of::<Matrix4<f32>>());
                 dv.logical.cmd_push_constants(dv.draw_command_buffer, self.shader.pipeline_layout, ShaderStageFlags::VERTEX, 0, &bytes_matrix4);
 
-                dv.logical.cmd_draw_indexed(dv.draw_command_buffer, mesh.index_count, 1, 0, 0, 1);
+                dv.logical.cmd_draw_indexed(dv.draw_command_buffer, mesh_asset.index_count, 1, 0, 0, 1);
             }
         }
     }
@@ -119,8 +118,8 @@ impl MeshSystem
         &mut self,
         asset_path: AssetPath,
         graphics: &GraphicsSystem,
-        node: Handle<Node>
     )
+    -> Handle<MeshAsset>
     {        
         const VERTEX_PER_FACE: u8 = 3;
         let (models, textures) = tobj::load_obj(asset_path.0, false).unwrap();
@@ -195,13 +194,12 @@ impl MeshSystem
             );
         }
         
-        self.storage.add(MeshInstance::new(&graphics, indexes.clone(), input, node));
+        self.assets.add(MeshAsset::new(&graphics, indexes.clone(), input))
     }
 }
 
-pub struct MeshInstance
+pub struct MeshAsset
 {
-    pub node: Handle<Node>, // TODO Perhaps needs to be without a handle.
     index_count: u32,
     index_buffer: vk::Buffer,
     index_memory: vk::DeviceMemory,
@@ -209,16 +207,15 @@ pub struct MeshInstance
     vertex_memory: vk::DeviceMemory
 }
 
-impl MeshInstance
+impl MeshAsset
 {
     pub fn new
     (
         graphics: &GraphicsSystem,
         indices: Vec<u32>,
         vertices: Vec<VertexInput>,
-        node: Handle<Node>
     )
-    -> MeshInstance
+    -> MeshAsset
     {
         let device = &graphics.device;
 
@@ -274,9 +271,8 @@ impl MeshInstance
                 (vertex_buffer, vertex_memory)
             };
 
-            MeshInstance
+            MeshAsset
             {
-                node,
                 index_count: indices.len() as u32,
                 index_buffer,
                 index_memory,
@@ -285,6 +281,12 @@ impl MeshInstance
             }
         }
     }    
+}
+
+pub struct MeshInstance
+{
+    pub node: Isometry3<f32>,
+    pub mesh: Handle<MeshAsset>
 }
 
 #[derive(Copy, Clone)]

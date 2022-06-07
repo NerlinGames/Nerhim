@@ -1,13 +1,12 @@
 use std::path::{PathBuf, Path};
 use rayon::prelude::*;
-use nalgebra::{Transform3, Matrix, Isometry3, Vector3, Point3, UnitComplex, RealField, Matrix4};
+use nalgebra::{Isometry3, Vector3, Point3, Matrix4, Translation3};
 use nokden::input::{InputSystem, Mapping, MethodKM};
 use nokden::graphics::{GraphicsSystem};
-use enamorf::{NodeSystem, Node};
-use enamorf::mesh::{MeshSystem};
+use enamorf::mesh::{MeshSystem, MeshInstance};
 use nokden::*;
 
-const MAP_SIZE: u8 = 10;
+const MAP_SIZE: u8 = 25;
 const TILE_METERS: f32 = 20.0;
 
 pub(crate) enum GameState
@@ -21,10 +20,8 @@ pub struct GameSystem
 {
     pub(crate) state: GameState,
 
-    pub(crate) rotate_mesh: Handle<Node>,
-    pub(crate) y_angle: f32,
-
-    pub(crate) tiles: Vec<Handle<Node>>,
+    pub(crate) rotate_neticas: Handle<MeshInstance>,
+    pub(crate) tiles: Vec<Handle<MeshInstance>>,
 
     pub(crate) input_submit: Handle<Mapping>,
     pub(crate) input_close: Handle<Mapping>,    
@@ -40,7 +37,6 @@ impl GameSystem
     pub(crate) fn new
     (        
         input: &mut InputSystem,
-        nodes: &mut NodeSystem,
         graphics: &mut GraphicsSystem,
         meshes: &mut MeshSystem,
         framework: &mut Framework
@@ -60,42 +56,51 @@ impl GameSystem
             &Point3::new(0.0, 30.0, -50.0),
             &Point3::origin(),
             &Vector3::y()
-        );
+        );        
 
-        let rotate_mesh = nodes.add(Node::new());
-        meshes.load_asset_obj(framework.asset_path(Path::new("neticas.obj")), &graphics, nodes.storage.duplicate(&rotate_mesh));                
+        let rotate_neticas =
+        {
+            let mesh_asset = meshes.load_asset_obj(framework.asset_path(Path::new("neticas.obj")), &graphics);
+            meshes.instances.add
+            (
+                MeshInstance
+                {
+                    node: Isometry3::identity(),
+                    mesh: mesh_asset
+                }
+            )
+        };
 
         let tiles = 
         {
-            let mut tiles: Vec<Handle<Node>> = Vec::new();
+            let mesh_asset = meshes.load_asset_obj(framework.asset_path(Path::new("grass_tree.obj")), &graphics);
+            let mut tiles: Vec<Handle<MeshInstance>> = Vec::new();
             let tile_count = MAP_SIZE as u64 * MAP_SIZE as u64;
             for index in 0..tile_count
             {
                 let position = index.to_2D_square(MAP_SIZE as u64);
                 let map_center = (MAP_SIZE / 2) as f32 * TILE_METERS + TILE_METERS / 2.0;
-                
-                let tile_node = nodes.add
-                (                    
-                    Node
-                    {
-                        enable: true,
-                        isometry: Isometry3::new
-                        (
-                            Vector3::new
+     
+                tiles.push
+                (
+                    meshes.instances.add
+                    (
+                        MeshInstance
+                        {
+                            node: Isometry3::new
                             (
-                                position[0] as f32 * TILE_METERS - map_center,
-                                0.0,
-                                position[1] as f32 * TILE_METERS - map_center,
+                                Vector3::new
+                                (
+                                    position[0] as f32 * TILE_METERS - map_center,
+                                    0.0,
+                                    position[1] as f32 * TILE_METERS - map_center,
+                                ),
+                                Vector3::zeros()
                             ),
-                            Vector3::zeros()),
-                        matrix: Matrix4::identity(),
-                        subtus: Vec::new()
-                    }
-                );                
-
-                meshes.load_asset_obj(framework.asset_path(Path::new("grass_tree.obj")), &graphics, nodes.storage.duplicate(&tile_node));
-
-                tiles.push(tile_node);
+                            mesh: meshes.assets.duplicate(&mesh_asset)
+                        }
+                    )
+                );
             }            
             tiles 
         };
@@ -103,7 +108,7 @@ impl GameSystem
         GameSystem
         {
             state: GameState::InMenu,
-            tiles,//: Vec::new(),
+            tiles,
             input_submit,
             input_close,            
             input_print_mapping,
@@ -111,8 +116,7 @@ impl GameSystem
             input_bind_mapping,
             input_load,
             input_save,
-            rotate_mesh,
-            y_angle: 0.0
+            rotate_neticas,
         }
     }
 
@@ -120,8 +124,8 @@ impl GameSystem
     (
         &mut self,
         input: &mut InputSystem,
+        meshes: &mut MeshSystem,
         framework: &mut Framework,
-        nodes: &mut NodeSystem
     )
     {
         if input.check_once(&self.input_close)
@@ -149,6 +153,7 @@ impl GameSystem
             framework.save_load(SaveLoad::Save);
         }
 
+        // Multi-threading test.
         /*self.bunch.par_iter_mut().for_each
         (
             |node|
@@ -157,16 +162,13 @@ impl GameSystem
             }
         );*/       
 
-        // TODO Needs rotation function for Node. Needs to ditch y_angle variable and use multiply instead.
-        let angle_per_second_y = 90.0_f32.to_radians();
-        let mut node = nodes.storage.write(&self.rotate_mesh);
-        self.y_angle += framework.delta() * angle_per_second_y;
-        let rotation = Isometry3::<f32>::new
+        let mut instance = meshes.instances.write(&self.rotate_neticas);
+        instance.node.delta_rotate
         (
-            Vector3::new(0.0, 30.0, 0.0),
-            Vector3::new(0.0, self.y_angle, 0.0)
-        );        
-        node.isometry = rotation;
+            Point3::new(0.0, 30.0, 0.0),
+            Vector3::new(0.0, 90.0, 0.0),
+            framework.delta()
+        );
     }
 }
 

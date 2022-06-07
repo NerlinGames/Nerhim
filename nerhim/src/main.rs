@@ -2,7 +2,6 @@ mod game;
 
 use winit::event::{DeviceEvent, WindowEvent};
 use nokden::input::{InputSystem};
-use enamorf::NodeSystem;
 use enamorf::mesh::{MeshSystem};
 use nokden::graphics::{GraphicsSystem};
 use nokden::{ApplicationEvents, Framework, SystemEvents, SaveLoad};
@@ -18,7 +17,6 @@ pub struct Application
 {
     game: game::GameSystem,
     input: InputSystem,
-    nodes: NodeSystem,  // TODO Perhaps this should also be a rigit body physics system.
     meshes: MeshSystem,
     graphics: GraphicsSystem,
 
@@ -65,18 +63,16 @@ for Application
     -> Application
     {
         let mut input = InputSystem::new();
-        let mut nodes = NodeSystem::new();        
         let mut graphics = GraphicsSystem::new(&framework.window());
         let mut meshes = MeshSystem::new(&graphics);
 
-        let game = GameSystem::new(&mut input, &mut nodes, &mut graphics, &mut meshes, framework);
+        let game = GameSystem::new(&mut input, &mut graphics, &mut meshes, framework);
         let console = ConsoleWidget::new(&mut input);                    
 
         Application
         {
             game,
             input,
-            nodes,
             graphics,
             console,
             meshes
@@ -86,10 +82,10 @@ for Application
     fn update
     (
         &mut self,
-        framework: &mut Framework
+        framework: &mut Framework        
     )
     {
-        self.game.update(&mut self.input, framework, &mut self.nodes);
+        self.game.update(&mut self.input, &mut self.meshes, framework);
         match self.console.update(&mut self.input, framework)
         {
             ConsoleState::Opened => (),
@@ -111,7 +107,7 @@ for Application
 
         let world_vp = self.graphics.world_projection.projection.as_matrix() * self.graphics.world_projection.view.to_homogeneous();
         let frame_index = self.graphics.frame_start();
-        self.meshes.update(&self.graphics, &self.nodes, &world_vp);
+        self.meshes.update(&self.graphics, &world_vp);
         self.graphics.frame_end(frame_index);
     }    
 
