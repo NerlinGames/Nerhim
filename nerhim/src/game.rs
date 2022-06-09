@@ -6,6 +6,8 @@ use nokden::graphics::{GraphicsSystem};
 use enamorf::mesh::{MeshSystem, MeshInstance};
 use nokden::*;
 
+const CAMERA_SPEED: f32 = 10.0;
+
 const MAP_SIZE: u8 = 25;
 const TILE_METERS: f32 = 20.0;
 
@@ -18,18 +20,23 @@ pub(crate) enum GameState
 
 pub struct GameSystem
 {
-    pub(crate) state: GameState,
+    state: GameState,
 
-    pub(crate) rotate_neticas: Handle<MeshInstance>,
-    pub(crate) tiles: Vec<Handle<MeshInstance>>,
+    rotate_neticas: Handle<MeshInstance>,
+    tiles: Vec<Handle<MeshInstance>>,
 
-    pub(crate) input_submit: Handle<Mapping>,
-    pub(crate) input_close: Handle<Mapping>,    
-    pub(crate) input_print_mapping: Handle<Mapping>,
-    pub(crate) input_default_mapping: Handle<Mapping>,
-    pub(crate) input_bind_mapping: Handle<Mapping>,
-    pub(crate) input_load: Handle<Mapping>,
-    pub(crate) input_save: Handle<Mapping>   
+    input_camera_forward: Handle<Mapping>,
+    input_camera_backward: Handle<Mapping>,
+    input_camera_right: Handle<Mapping>,    
+    input_camera_left: Handle<Mapping>,
+
+    input_submit: Handle<Mapping>,
+    input_close: Handle<Mapping>,    
+    input_print_mapping: Handle<Mapping>,
+    input_default_mapping: Handle<Mapping>,
+    input_bind_mapping: Handle<Mapping>,
+    input_load: Handle<Mapping>,
+    input_save: Handle<Mapping>   
 }
 
 impl GameSystem
@@ -43,15 +50,7 @@ impl GameSystem
     )    
     -> GameSystem
     {
-        let input_submit = input.add_mapping(Mapping::new("GUI Submit", MethodKM::Enter));
-        let input_close = input.add_mapping(Mapping::new("Quit App", MethodKM::ESC));        
-        let input_print_mapping = input.add_mapping(Mapping::new("Print Mapping", MethodKM::F12));
-        let input_default_mapping = input.add_mapping(Mapping::new("Default Mapping", MethodKM::F11));
-        let input_bind_mapping = input.add_mapping(Mapping::new("Bind Mapping", MethodKM::F10));
-        let input_load = input.add_mapping(Mapping::new("Load", MethodKM::F5));
-        let input_save = input.add_mapping(Mapping::new("Save", MethodKM::F6));
-
-        graphics.world_projection.view = Isometry3::look_at_rh
+        graphics.world_camera.transform = Isometry3::look_at_rh
         (
             &Point3::new(0.0, 30.0, -50.0),
             &Point3::origin(),
@@ -65,7 +64,7 @@ impl GameSystem
             (
                 MeshInstance
                 {
-                    node: Isometry3::identity(),
+                    transform: Isometry3::identity(),
                     mesh: mesh_asset
                 }
             )
@@ -87,7 +86,7 @@ impl GameSystem
                     (
                         MeshInstance
                         {
-                            node: Isometry3::new
+                            transform: Isometry3::new
                             (
                                 Vector3::new
                                 (
@@ -107,16 +106,20 @@ impl GameSystem
 
         GameSystem
         {
-            state: GameState::InMenu,
+            state: GameState::InGame,
             tiles,
-            input_submit,
-            input_close,            
-            input_print_mapping,
-            input_default_mapping,
-            input_bind_mapping,
-            input_load,
-            input_save,
             rotate_neticas,
+            input_submit: input.add_mapping(Mapping::new("GUI Submit", MethodKM::Enter)),
+            input_close: input.add_mapping(Mapping::new("Quit App", MethodKM::ESC)),            
+            input_print_mapping: input.add_mapping(Mapping::new("Print Mapping", MethodKM::F12)),
+            input_default_mapping: input.add_mapping(Mapping::new("Default Mapping", MethodKM::F11)),
+            input_bind_mapping: input.add_mapping(Mapping::new("Bind Mapping", MethodKM::F10)),
+            input_load: input.add_mapping(Mapping::new("Load", MethodKM::F5)),
+            input_save: input.add_mapping(Mapping::new("Save", MethodKM::F6)),            
+            input_camera_forward: input.add_mapping(Mapping::new("Move Camera Forward", MethodKM::W)),
+            input_camera_backward: input.add_mapping(Mapping::new("Move Camera Backward", MethodKM::S)),
+            input_camera_right: input.add_mapping(Mapping::new("Move Camera Right", MethodKM::D)),
+            input_camera_left: input.add_mapping(Mapping::new("Move Camera Left", MethodKM::A)),
         }
     }
 
@@ -125,6 +128,7 @@ impl GameSystem
         &mut self,
         input: &mut InputSystem,
         meshes: &mut MeshSystem,
+        graphics: &mut GraphicsSystem,
         framework: &mut Framework,
     )
     {
@@ -153,6 +157,33 @@ impl GameSystem
             framework.save_load(SaveLoad::Save);
         }
 
+        match self.state
+        {
+            GameState::InGame =>
+            {
+                /*if input.check_once(&self.input_camera_forward)
+                {
+                    graphics.world_camera.transform.append_translation_mut(&Translation3::new(0.0, 0.0, 10.0));
+                }
+
+                if input.check_once(&self.input_camera_backward)
+                {
+                    
+                }
+
+                if input.check_once(&self.input_camera_forward)
+                {
+                    
+                }
+
+                if input.check_once(&self.input_camera_forward)
+                {
+                    
+                }*/
+            }
+            _ => todo!()
+        }        
+
         // Multi-threading test.
         /*self.bunch.par_iter_mut().for_each
         (
@@ -163,7 +194,7 @@ impl GameSystem
         );*/       
 
         let mut instance = meshes.instances.write(&self.rotate_neticas);
-        instance.node.delta_rotate
+        instance.transform.delta_rotate
         (
             Point3::new(0.0, 30.0, 0.0),
             Vector3::new(0.0, 90.0, 0.0),

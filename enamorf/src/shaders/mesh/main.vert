@@ -9,11 +9,12 @@ layout (location = 0) out vec4 o_color;
 
 layout (push_constant) uniform Constants
 {
-    mat4 mvp;
+    mat4 camera;
+    mat4 model_position;
 } pc;
 
 void main()
 {
     o_color = color;
-    gl_Position = pc.mvp * vec4(pos, 1.0);
+    gl_Position = pc.camera * pc.model_position * vec4(pos, 1.0);
 }

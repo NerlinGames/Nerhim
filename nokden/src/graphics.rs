@@ -34,10 +34,10 @@ pub struct GraphicsSystem
     resolution_height: u32,
 
     fov_y: f32,
-    pub world_projection: WorldViewProjection,
+    pub world_camera: WorldViewProjection,
 
     //view_widget:
-    pub gui_projection: GUIProjection,
+    pub gui_camera: GUIProjection,
 
     instance: Instance,
 
@@ -112,8 +112,8 @@ impl GraphicsSystem
             resolution_width: defaults::RESOLUTION_WIDTH,
             resolution_height: defaults::RESOLUTION_HEIGHT,
             fov_y: defaults::FOV_Y,
-            world_projection: WorldViewProjection::perspective(),           
-            gui_projection: GUIProjection::orthographic(),
+            world_camera: WorldViewProjection::perspective(),           
+            gui_camera: GUIProjection::orthographic(),
             instance,
             surface,
             surface_khr,
@@ -371,7 +371,7 @@ impl GraphicsSystem
 pub struct WorldViewProjection
 {
     pub projection: Perspective3<f32>,
-    pub view: Isometry3<f32>,
+    pub transform: Isometry3<f32>,
 }
 
 impl WorldViewProjection
@@ -389,7 +389,7 @@ impl WorldViewProjection
                 defaults::WORLD_Z_NEAR,
                 defaults::WORLD_Z_FAR
             ),
-            view: Isometry3::look_at_rh
+            transform: Isometry3::look_at_rh
             (
                 &Point3::new(0.0, 0.0, -5.0),
                 &Point3::origin(),
@@ -1023,7 +1023,7 @@ impl Swapchain
         present_modes
             .iter()
             .cloned()
-            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
+            .find(|&mode| mode == vk::PresentModeKHR::IMMEDIATE)
             .unwrap_or(vk::PresentModeKHR::FIFO)
     }
 }

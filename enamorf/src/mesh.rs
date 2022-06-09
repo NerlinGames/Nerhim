@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::slice;
+use rayon::prelude::*;
 use std::mem::{self, align_of, size_of};
 use ash::vk::{self, VertexInputAttributeDescription, ShaderStageFlags, RenderPassBeginInfoBuilder, VertexInputBindingDescription};
 use ash::util::Align;
@@ -57,7 +58,7 @@ impl MeshSystem
 
         let push_constant_range = vk::PushConstantRange::builder()
             .stage_flags(ShaderStageFlags::VERTEX)
-            .size(size_of::<Matrix4<f32>>() as u32)
+            .size(2 * size_of::<Matrix4<f32>>() as u32)
             .build();
 
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
@@ -86,7 +87,7 @@ impl MeshSystem
     (
         &self,
         graphics: &GraphicsSystem,
-        view_projection: &Matrix4<f32>
+        world_camera: &Matrix4<f32>
     )
     {
         unsafe
@@ -102,11 +103,17 @@ impl MeshSystem
                 dv.logical.cmd_bind_vertex_buffers(dv.draw_command_buffer, 0, &[mesh_asset.vertex_buffer], &[0]);
                 dv.logical.cmd_bind_index_buffer(dv.draw_command_buffer, mesh_asset.index_buffer, 0, vk::IndexType::UINT32); // TODO Needs to use UINT16.
 
-                let mvp = view_projection * instance.node.to_homogeneous();
+                let mvp = *world_camera;
                 let c_u32: *const Matrix4<f32> = &mvp;
                 let c_u8: *const u8 = c_u32 as *const _;
-                let bytes_matrix4: &[u8] = slice::from_raw_parts(c_u8, mem::size_of::<Matrix4<f32>>());
-                dv.logical.cmd_push_constants(dv.draw_command_buffer, self.shader.pipeline_layout, ShaderStageFlags::VERTEX, 0, &bytes_matrix4);
+                let bytes_camera: &[u8] = slice::from_raw_parts(c_u8, mem::size_of::<Matrix4<f32>>());
+
+                let mvp = instance.transform.to_homogeneous();
+                let c_u32: *const Matrix4<f32> = &mvp;
+                let c_u8: *const u8 = c_u32 as *const _;
+                let bytes_model_position: &[u8] = slice::from_raw_parts(c_u8, mem::size_of::<Matrix4<f32>>());
+
+                dv.logical.cmd_push_constants(dv.draw_command_buffer, self.shader.pipeline_layout, ShaderStageFlags::VERTEX, 0, &[bytes_camera, bytes_model_position].concat());
 
                 dv.logical.cmd_draw_indexed(dv.draw_command_buffer, mesh_asset.index_count, 1, 0, 0, 1);
             }
@@ -285,7 +292,7 @@ impl MeshAsset
 
 pub struct MeshInstance
 {
-    pub node: Isometry3<f32>,
+    pub transform: Isometry3<f32>,
     pub mesh: Handle<MeshAsset>
 }
 

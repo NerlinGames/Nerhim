@@ -321,6 +321,7 @@ dependencies = [
  "ash",
  "nalgebra",
  "nokden",
+ "rayon",
  "tobj",
  "winit",
 ]

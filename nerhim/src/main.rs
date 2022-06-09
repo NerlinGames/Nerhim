@@ -85,7 +85,7 @@ for Application
         framework: &mut Framework        
     )
     {
-        self.game.update(&mut self.input, &mut self.meshes, framework);
+        self.game.update(&mut self.input, &mut self.meshes, &mut self.graphics, framework);
         match self.console.update(&mut self.input, framework)
         {
             ConsoleState::Opened => (),
@@ -105,7 +105,7 @@ for Application
             self.input.register_device_events(&event)
         }        
 
-        let world_vp = self.graphics.world_projection.projection.as_matrix() * self.graphics.world_projection.view.to_homogeneous();
+        let world_vp = self.graphics.world_camera.projection.as_matrix() * self.graphics.world_camera.transform.to_homogeneous();
         let frame_index = self.graphics.frame_start();
         self.meshes.update(&self.graphics, &world_vp);
         self.graphics.frame_end(frame_index);
