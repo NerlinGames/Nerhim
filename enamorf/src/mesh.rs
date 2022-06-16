@@ -1,11 +1,10 @@
-use std::path::{Path, PathBuf};
 use std::slice;
 use rayon::prelude::*;
 use std::mem::{self, align_of, size_of};
 use ash::vk::{self, VertexInputAttributeDescription, ShaderStageFlags, RenderPassBeginInfoBuilder, VertexInputBindingDescription};
 use ash::util::Align;
 use nalgebra::base::Matrix4;
-use nalgebra::{Transform3, Matrix, Isometry3};
+use nalgebra::Isometry3;
 use nokden::{Handle, Storage, offset_of, AssetPath};
 use nokden::graphics::{Shader, GraphicsSystem};
 
@@ -129,79 +128,91 @@ impl MeshSystem
     -> Handle<MeshAsset>
     {        
         const VERTEX_PER_FACE: u8 = 3;
-        let (models, textures) = tobj::load_obj(asset_path.0, false).unwrap();
-  
-        let mut colors = Vec::new(); // TODO Should not grouped with vertex positions but have its own index for reuse.
-        let mut indexes: Vec<u32> = Vec::new();
-        let mut positions = Vec::new();
-        for model in models
-        {
-            for surface_index in &model.mesh.indices
-            {
-                indexes.push(*surface_index + positions.len() as u32);
-            }
-
-            for position_index in 0 .. model.mesh.positions.len() / VERTEX_PER_FACE as usize
-            {
-                positions.push
-                (
-                    [
-                        model.mesh.positions[position_index * 3],
-                        model.mesh.positions[position_index * 3 + 1],
-                        model.mesh.positions[position_index * 3 + 2]
-                    ]
-                );
-
-                colors.push
-                (
-                    [
-                        textures[model.mesh.material_id.unwrap()].diffuse[0],
-                        textures[model.mesh.material_id.unwrap()].diffuse[1],
-                        textures[model.mesh.material_id.unwrap()].diffuse[2],
-                        1.0
-                    ]
-                );
-            }
-        }
-
-        let mut input: Vec<VertexInput> = Vec::new();
-        for (index, position) in positions.iter().enumerate()
-        {
-            input.push
-            (
-                VertexInput
-                {
-                    position:
-                    [
-                        position[0],
-                        position[1],
-                        position[2],                        
-                    ],
-                    color: colors[index]
-                }
-            );
-        }
-
-        let mut highest = 0;
-        for vetex_index in &indexes
-        {
-            if *vetex_index > highest
-            {
-                highest = *vetex_index;
-            }
-        }
-
-        if ((input.len() - 1) as u32) < highest
+        let (models, textures) = tobj::load_obj(&asset_path.0, false).unwrap();
+        if models.is_empty() || textures.is_empty()
         {
             panic!
             (
-                "The highest vertex index value is not allowed to be higher than the count of inputs minus one. Max Input Index: {}, Highest Detected: {}",
-                input.len() - 1,
-                highest
+                "Some data is empty: Models {}, Textures {}, for file {}.",
+                models.len(),
+                textures.len(),
+                &asset_path.0.display()
             );
         }
-        
-        self.assets.add(MeshAsset::new(&graphics, indexes.clone(), input))
+        else
+        {
+            let mut colors = Vec::new(); // TODO Should not grouped with vertex positions but have its own index for reuse.
+            let mut indexes: Vec<u32> = Vec::new();
+            let mut positions = Vec::new();
+            for model in models
+            {
+                for surface_index in &model.mesh.indices
+                {
+                    indexes.push(*surface_index + positions.len() as u32);
+                }
+    
+                for position_index in 0 .. model.mesh.positions.len() / VERTEX_PER_FACE as usize
+                {
+                    positions.push
+                    (
+                        [
+                            model.mesh.positions[position_index * 3],
+                            model.mesh.positions[position_index * 3 + 1],
+                            model.mesh.positions[position_index * 3 + 2]
+                        ]
+                    );
+    
+                    colors.push
+                    (
+                        [
+                            textures[model.mesh.material_id.unwrap()].diffuse[0],
+                            textures[model.mesh.material_id.unwrap()].diffuse[1],
+                            textures[model.mesh.material_id.unwrap()].diffuse[2],
+                            1.0
+                        ]
+                    );
+                }
+            }
+    
+            let mut input: Vec<VertexInput> = Vec::new();
+            for (index, position) in positions.iter().enumerate()
+            {
+                input.push
+                (
+                    VertexInput
+                    {
+                        position:
+                        [
+                            position[0],
+                            position[1],
+                            position[2],                        
+                        ],
+                        color: colors[index]
+                    }
+                );
+            }
+    
+            let mut highest = 0;
+            for vetex_index in &indexes
+            {
+                if *vetex_index > highest
+                {
+                    highest = *vetex_index;
+                }
+            }
+    
+            if ((input.len() - 1) as u32) < highest
+            {
+                panic!
+                (
+                    "The highest vertex index value is not allowed to be higher than the count of inputs minus one. Max Input Index: {}, Highest Detected: {}",
+                    input.len() - 1,
+                    highest
+                );
+            }
+            
+            self.assets.add(MeshAsset::new(&graphics, indexes.clone(), input))
+        }        
     }
 }
 

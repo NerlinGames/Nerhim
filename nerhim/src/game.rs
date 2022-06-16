@@ -8,8 +8,8 @@ use nokden::*;
 
 const CAMERA_SPEED: f32 = 10.0;
 
-const MAP_SIZE: u8 = 25;
-const TILE_METERS: f32 = 20.0;
+const MAP_SIZE: u8 = 30;
+const TILE_METERS: f32 = 1.0;
 
 pub(crate) enum GameState
 {
@@ -52,7 +52,7 @@ impl GameSystem
     {
         graphics.world_camera.transform = Isometry3::look_at_rh
         (
-            &Point3::new(0.0, 30.0, -50.0),
+            &Point3::new(0.0, 15.0, -10.0),
             &Point3::origin(),
             &Vector3::y()
         );        
@@ -72,7 +72,7 @@ impl GameSystem
 
         let tiles = 
         {
-            let mesh_asset = meshes.load_asset_obj(framework.asset_path(Path::new("grass_tree.obj")), &graphics);
+            let mesh_asset = meshes.load_asset_obj(framework.asset_path(Path::new("tile_test.obj")), &graphics);
             let mut tiles: Vec<Handle<MeshInstance>> = Vec::new();
             let tile_count = MAP_SIZE as u64 * MAP_SIZE as u64;
             for index in 0..tile_count
