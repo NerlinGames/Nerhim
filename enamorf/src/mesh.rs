@@ -1,8 +1,7 @@
 use std::slice;
 use rayon::prelude::*;
-use std::mem::{self, align_of, size_of};
+use std::mem::{self, size_of};
 use ash::vk::{self, VertexInputAttributeDescription, ShaderStageFlags, RenderPassBeginInfoBuilder, VertexInputBindingDescription};
-use ash::util::Align;
 use nalgebra::base::Matrix4;
 use nalgebra::Isometry3;
 use nokden::{Handle, Storage, offset_of, AssetPath};
@@ -220,9 +219,9 @@ pub struct MeshAsset
 {
     index_count: u32,
     index_buffer: vk::Buffer,
-    index_memory: vk::DeviceMemory,
+    index_memory: vk::DeviceMemory, // TODO Perhaps has no use after new function.
     vertex_buffer: vk::Buffer,
-    vertex_memory: vk::DeviceMemory
+    vertex_memory: vk::DeviceMemory // TODO Perhaps has no use after new function.
 }
 
 impl MeshAsset
@@ -235,68 +234,16 @@ impl MeshAsset
     )
     -> MeshAsset
     {
-        let device = &graphics.device;
+        let (index_buffer, index_memory) = graphics.bind_buffer_memory(&indices, vk::BufferUsageFlags::INDEX_BUFFER);
+        let (vertex_buffer, vertex_memory) = graphics.bind_buffer_memory(&vertices, vk::BufferUsageFlags::VERTEX_BUFFER);
 
-        unsafe
+        MeshAsset
         {
-            let (index_buffer, index_memory) =
-            {
-                let buffer_info = vk::BufferCreateInfo::builder()
-                    //.size(std::mem::size_of_val(&indices) as u64)
-                    .size(indices.len() as u64 * size_of::<u32>() as u64)
-                    .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-                    .sharing_mode(vk::SharingMode::EXCLUSIVE);
-                let index_buffer = device.logical.create_buffer(&buffer_info, None).unwrap();
-
-                let memory_req = device.logical.get_buffer_memory_requirements(index_buffer);
-                let memory_type_index = device.find_memorytype_index(&memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT).unwrap();
-                let allocate_info = vk::MemoryAllocateInfo { allocation_size: memory_req.size, memory_type_index, ..Default::default() };
-                let index_memory = device.logical.allocate_memory(&allocate_info, None).unwrap();
-
-                let index_ptr = device.logical.map_memory(index_memory, 0, memory_req.size, vk::MemoryMapFlags::empty()).unwrap();
-                let mut index_slice = Align::new(index_ptr, align_of::<u32>() as u64, memory_req.size);
-                index_slice.copy_from_slice(&indices);
-                device.logical.unmap_memory(index_memory);
-
-                device.logical.bind_buffer_memory(index_buffer, index_memory, 0).unwrap();
-
-                (index_buffer, index_memory)
-            };
-
-            let (vertex_buffer, vertex_memory) =
-            {
-                let buffer_info = vk::BufferCreateInfo
-                {
-                    size: vertices.len() as u64 * size_of::<VertexInput>() as u64,
-                    usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-                    sharing_mode: vk::SharingMode::EXCLUSIVE,
-                    ..Default::default()
-                };
-                let vertex_buffer = device.logical.create_buffer(&buffer_info, None).unwrap();
-
-                let memory_req = device.logical.get_buffer_memory_requirements(vertex_buffer);
-                let memory_type_index = device.find_memorytype_index(&memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT).unwrap();
-                let allocate_info = vk::MemoryAllocateInfo { allocation_size: memory_req.size, memory_type_index, ..Default::default() };
-                let vertex_memory = device.logical.allocate_memory(&allocate_info, None).unwrap();
-
-                let vert_ptr = device.logical.map_memory(vertex_memory, 0, memory_req.size, vk::MemoryMapFlags::empty()).unwrap();
-                let mut vert_align = Align::new(vert_ptr, align_of::<VertexInput>() as u64, memory_req.size);
-                vert_align.copy_from_slice(&vertices);
-
-                device.logical.unmap_memory(vertex_memory);
-                device.logical.bind_buffer_memory(vertex_buffer, vertex_memory, 0).unwrap();
-
-                (vertex_buffer, vertex_memory)
-            };
-
-            MeshAsset
-            {
-                index_count: indices.len() as u32,
-                index_buffer,
-                index_memory,
-                vertex_buffer,
-                vertex_memory
-            }
+            index_count: indices.len() as u32,
+            index_buffer,
+            index_memory,
+            vertex_buffer,
+            vertex_memory
         }
     }    
 }

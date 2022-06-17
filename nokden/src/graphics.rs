@@ -3,8 +3,9 @@ use std::borrow::Cow;
 use std::ffi::CString;
 use std::ffi::CStr;
 use std::io::Cursor;
-use ash::extensions::khr;
-use ash::extensions::ext;
+use std::mem::{self, align_of, size_of};
+use ash::util::Align;
+use ash::extensions::{khr, ext};
 use ash::{vk, Entry, Instance, util};
 use ash::vk::SurfaceKHR;
 use ash::vk::SurfaceCapabilitiesKHR;
@@ -97,8 +98,12 @@ impl GraphicsSystem
             &instance,
             &device.physical,
             &[
+                // Ray tracing in general.
                 khr::AccelerationStructure::name().to_str().unwrap().to_string(),
                 khr::RayTracingPipeline::name().to_str().unwrap().to_string(),
+
+                // Needed by VK_KHR_acceleration_structure.
+                khr::DeferredHostOperations::name().to_str().unwrap().to_string(),
             ]
         );
         
@@ -123,6 +128,53 @@ impl GraphicsSystem
             swapchain
         }
     }    
+
+    pub fn bind_buffer_memory
+    <
+        T: Copy
+    >
+    (
+        &self,
+        data: &Vec<T>,
+        flags: vk::BufferUsageFlags,
+    )
+    -> (vk::Buffer, vk::DeviceMemory)
+    {
+        unsafe
+        {
+            let buffer_info = vk::BufferCreateInfo::builder()
+                .size(data.len() as u64 * size_of::<T>() as u64)
+                .usage(flags)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            
+            let index_buffer = self.device.logical.create_buffer(&buffer_info, None).unwrap();
+
+            let memory_req = self.device.logical.get_buffer_memory_requirements(index_buffer);
+            let memory_type_index = self.device.find_memorytype_index
+            (
+                &memory_req,
+                vk::MemoryPropertyFlags::HOST_VISIBLE |
+                vk::MemoryPropertyFlags::HOST_COHERENT
+            ).unwrap();
+
+            let allocate_info = vk::MemoryAllocateInfo
+            {
+                allocation_size: memory_req.size,
+                memory_type_index,
+                ..Default::default()
+            };
+            let index_memory = self.device.logical.allocate_memory(&allocate_info, None).unwrap();
+
+            let index_ptr = self.device.logical.map_memory(index_memory, 0, memory_req.size, vk::MemoryMapFlags::empty()).unwrap();
+            let mut index_slice = Align::new(index_ptr, align_of::<T>() as u64, memory_req.size);
+            index_slice.copy_from_slice(&data);
+            self.device.logical.unmap_memory(index_memory);
+
+            self.device.logical.bind_buffer_memory(index_buffer, index_memory, 0).unwrap();
+
+            (index_buffer, index_memory)
+        }
+    }
 
     fn check_device_extensions
     (
@@ -330,9 +382,9 @@ impl GraphicsSystem
                 self.device.logical.destroy_image_view(image_view, None);
             }
 
-            for x in self.swapchain.framebuffers.iter()
+            for framebuffer in self.swapchain.framebuffers.iter()
             {
-                self.device.logical.destroy_framebuffer(*x, None);
+                self.device.logical.destroy_framebuffer(*framebuffer, None);
             }
 
             self.device.logical.destroy_render_pass(self.swapchain.renderpass, None);
