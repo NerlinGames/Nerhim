@@ -11,6 +11,13 @@ const CAMERA_SPEED: f32 = 10.0;
 const MAP_SIZE: u8 = 30;
 const TILE_METERS: f32 = 1.0;
 
+struct HandleMapping (Handle<Mapping>);
+
+impl HandleMapping
+{
+
+}
+
 pub(crate) enum GameState
 {
     InMenu,
@@ -193,8 +200,7 @@ impl GameSystem
             }
         );*/       
 
-        let mut instance = meshes.instances.write(&self.rotate_neticas);
-        instance.transform.delta_rotate
+        meshes.instances.write(&self.rotate_neticas).transform.delta_rotate
         (
             Point3::new(0.0, 30.0, 0.0),
             Vector3::new(0.0, 90.0, 0.0),

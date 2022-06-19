@@ -62,7 +62,7 @@ impl GraphicsSystem
     {
         let entry = unsafe { Entry::load().unwrap() };
 
-        let application_info = vk::ApplicationInfo::builder().api_version(vk::API_VERSION_1_1);
+        let application_info = vk::ApplicationInfo::builder().api_version(vk::API_VERSION_1_2);
 
         let mut extensions: Vec<*const c_char> = ash_window::enumerate_required_extensions(window).unwrap().to_vec();
         extensions.push(ext::DebugUtils::name().as_ptr());

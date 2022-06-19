@@ -237,6 +237,9 @@ impl MeshAsset
         let (index_buffer, index_memory) = graphics.bind_buffer_memory(&indices, vk::BufferUsageFlags::INDEX_BUFFER);
         let (vertex_buffer, vertex_memory) = graphics.bind_buffer_memory(&vertices, vk::BufferUsageFlags::VERTEX_BUFFER);
 
+        //let accelleration_geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder().
+            
+
         MeshAsset
         {
             index_count: indices.len() as u32,
