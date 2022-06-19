@@ -11,13 +11,6 @@ const CAMERA_SPEED: f32 = 10.0;
 const MAP_SIZE: u8 = 30;
 const TILE_METERS: f32 = 1.0;
 
-struct HandleMapping (Handle<Mapping>);
-
-impl HandleMapping
-{
-
-}
-
 pub(crate) enum GameState
 {
     InMenu,
